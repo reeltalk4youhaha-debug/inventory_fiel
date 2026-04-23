@@ -23,9 +23,15 @@ function json(statusCode, payload) {
 }
 
 function getRoutePath(event) {
-  const rawPath = event.queryStringParameters?.path || event.path || ''
-  const normalizedPath = `/${String(rawPath).replace(/^\/+/, '')}`.replace(/\/$/, '')
-  return normalizedPath || '/'
+  // Netlify redirect passes path as query param from netlify.toml
+  let rawPath = event.queryStringParameters?.path || ''
+  // Fallback to event.path if available
+  if (!rawPath) {
+    rawPath = event.path || ''
+  }
+  // Remove leading/trailing slashes and normalize
+  rawPath = String(rawPath).trim().replace(/^\/+/, '').replace(/\/+$/, '')
+  return `/${rawPath}`
 }
 
 async function parseBody(event) {
