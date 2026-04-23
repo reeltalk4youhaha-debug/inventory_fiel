@@ -23,7 +23,7 @@ function json(statusCode, payload) {
 }
 
 function getRoutePath(event) {
-  const rawPath = event.queryStringParameters?.path || ''
+  const rawPath = event.path || event.rawPath || ''
   const normalizedPath = `/${String(rawPath).replace(/^\/+/, '')}`.replace(/\/$/, '')
   return normalizedPath || '/'
 }
