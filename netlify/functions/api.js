@@ -13,14 +13,13 @@ import {
 import { createSessionToken, extractBearerToken, verifySessionToken } from '../../server/lib/session.js'
 
 function json(statusCode, payload) {
-  return {
-    statusCode,
+  return new Response(JSON.stringify(payload), {
+    status: statusCode,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
     },
-    body: JSON.stringify(payload),
-  }
+  })
 }
 
 function getRoutePath(event) {
@@ -59,12 +58,12 @@ export async function handler(event) {
 
   try {
     if (method === 'OPTIONS') {
-      return {
-        statusCode: 204,
+      return new Response(null, {
+        status: 204,
         headers: {
           Allow: 'GET,POST,PUT,DELETE,OPTIONS',
         },
-      }
+      })
     }
 
     if (routePath === '/health') {
