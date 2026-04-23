@@ -60,6 +60,16 @@ async function requireUser(event) {
 export async function handler(event) {
   const method = String(event.httpMethod || 'GET').toUpperCase()
   const routePath = getRoutePath(event)
+  
+  // Debug logging
+  console.log('DEBUG:', {
+    method,
+    routePath,
+    queryStringParameters: event.queryStringParameters,
+    path: event.path,
+    rawPath: event.rawPath,
+  })
+  
   const productMatch = routePath.match(/^\/products\/(\d+)$/)
 
   try {
