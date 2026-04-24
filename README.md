@@ -1,9 +1,10 @@
 # Inventory Fiel
 
-React + Vite inventory app with a PostgreSQL-backed API. It now supports two deployment paths:
+React + Vite inventory app with a PostgreSQL-backed API. It now supports three deployment paths:
 
 - local development with the existing `Express` server in `server/`
 - production deployment on `Netlify` using `netlify/functions/api.js`
+- production deployment on `Vercel` using `api/[...path].js`
 
 ## Local development
 
@@ -58,6 +59,31 @@ Notes:
 - Leave `VITE_API_URL` empty when the frontend and API are both served from the same Netlify site.
 - The `/api/*` routes are rewritten to the Netlify function at `netlify/functions/api.js`.
 - Auth now requires a signed session token, so `SESSION_SECRET` must be set in production.
+
+## Vercel deployment
+
+This repo is now also configured for Vercel using the serverless route at [`api/[...path].js`](./api/[...path].js).
+
+Suggested Vercel settings:
+
+- Framework preset: `Vite`
+- Build command: `npm run build`
+- Output directory: `dist`
+
+Vercel environment variables:
+
+- `DATABASE_URL`
+- `DB_SCHEMA`
+- `DB_SSL=true`
+- `SESSION_SECRET`
+- `VITE_API_URL`
+
+Notes:
+
+- Leave `VITE_API_URL` empty when the frontend and API are both deployed on the same Vercel project.
+- The Vercel API route handles `/api/auth/*`, `/api/profile/*`, `/api/products/*`, and `/api/health`.
+- The health endpoint now checks the database connection, schema, and table presence instead of returning a static response.
+- For Supabase on Vercel, prefer the pooled `DATABASE_URL` connection string.
 
 ## Scripts
 
