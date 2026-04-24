@@ -57,6 +57,37 @@ function formatItemCount(value) {
   return `${amount} ${amount === 1 ? 'item' : 'items'}`
 }
 
+function normalizeProduct(product) {
+  if (!product || typeof product !== 'object') {
+    return null
+  }
+
+  if (product.id === undefined || product.id === null) {
+    return null
+  }
+
+  return {
+    id: product.id,
+    name: String(product.name ?? '').trim() || 'Untitled product',
+    flavor: String(product.flavor ?? '').trim(),
+    sku: String(product.sku ?? '').trim(),
+    description: String(product.description ?? '').trim(),
+    items: Number(product.items ?? 0),
+    updates: String(product.updates ?? '').trim() || 'Recently added product',
+    imageUrl: String(product.imageUrl ?? '').trim(),
+    createdAt: product.createdAt ?? null,
+    updatedAt: product.updatedAt ?? null,
+  }
+}
+
+function normalizeProductList(products) {
+  if (!Array.isArray(products)) {
+    return []
+  }
+
+  return products.map(normalizeProduct).filter(Boolean)
+}
+
 function buildUpdateMessage({ previousProduct, nextValues, mode }) {
   if (mode === 'add') {
     return 'Recently added product'
@@ -221,7 +252,7 @@ function App() {
         if (isCancelled) return
 
         setAccount(profileResponse.user)
-        setProducts(productsResponse.products || [])
+        setProducts(normalizeProductList(productsResponse.products))
         setProductsError('')
       } catch {
         if (isCancelled) return
@@ -245,8 +276,9 @@ function App() {
     }
   }, [isAuthenticated])
 
-  const filteredProducts = filterProducts(products, searchQuery)
-  const dashboardStats = getDashboardStats(products)
+  const normalizedProducts = normalizeProductList(products)
+  const filteredProducts = filterProducts(normalizedProducts, searchQuery)
+  const dashboardStats = getDashboardStats(normalizedProducts)
   const dashboardTotalPages = getTotalPages(filteredProducts.length)
   const inventoryTotalPages = getTotalPages(filteredProducts.length)
   const dashboardPage = Math.min(pageByView.Dashboard, dashboardTotalPages)
@@ -343,7 +375,7 @@ function App() {
 
     const previousProduct =
       editor.mode === 'edit'
-        ? products.find((product) => product.id === editor.productId) ?? null
+        ? normalizedProducts.find((product) => product.id === editor.productId) ?? null
         : null
 
     const payload = {
@@ -361,12 +393,26 @@ function App() {
     try {
       if (editor.mode === 'edit') {
         const response = await inventoryApi.updateProduct(editor.productId, payload)
+        const nextProduct = normalizeProduct(response.product)
+
+        if (!nextProduct) {
+          throw new Error('Unexpected product response from the API.')
+        }
+
         setProducts((current) =>
-          current.map((product) => (product.id === editor.productId ? response.product : product)),
+          normalizeProductList(current).map((product) =>
+            product.id === editor.productId ? nextProduct : product,
+          ),
         )
       } else {
         const response = await inventoryApi.createProduct(payload)
-        setProducts((current) => [response.product, ...current])
+        const nextProduct = normalizeProduct(response.product)
+
+        if (!nextProduct) {
+          throw new Error('Unexpected product response from the API.')
+        }
+
+        setProducts((current) => [nextProduct, ...normalizeProductList(current)])
       }
 
       setProductsError('')
@@ -382,7 +428,9 @@ function App() {
 
     try {
       await inventoryApi.deleteProduct(deleteTarget.id)
-      setProducts((current) => current.filter((product) => product.id !== deleteTarget.id))
+      setProducts((current) =>
+        normalizeProductList(current).filter((product) => product.id !== deleteTarget.id),
+      )
       setProductsError('')
       setDeleteTarget(null)
     } catch (error) {
@@ -449,7 +497,7 @@ function App() {
           title="Manage Products"
           description="Create, update, and delete inventory items stored in your PostgreSQL database."
           products={inventoryProducts}
-          totalCount={products.length}
+          totalCount={normalizedProducts.length}
           searchQuery={searchQuery}
           filteredCount={filteredProducts.length}
           currentPage={inventoryPage}
@@ -472,7 +520,7 @@ function App() {
     }
 
     if (activePage === 'Reports') {
-      return <ReportsPanel products={products} />
+      return <ReportsPanel products={normalizedProducts} />
     }
 
     if (activePage === 'Profile' && account) {
@@ -492,7 +540,7 @@ function App() {
         title="Product Overview"
         description="This dashboard reflects the latest product records stored in your PostgreSQL inventory database."
         products={dashboardProducts}
-        totalCount={products.length}
+        totalCount={normalizedProducts.length}
         searchQuery={searchQuery}
         filteredCount={filteredProducts.length}
         currentPage={dashboardPage}
