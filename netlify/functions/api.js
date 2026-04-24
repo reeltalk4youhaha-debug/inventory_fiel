@@ -61,20 +61,43 @@ async function requireUser(event) {
 
 export async function handler(event) {
   const method = String(event.httpMethod || 'GET').toUpperCase()
-  const routePath = getRoutePath(event)
+  const path = event.queryStringParameters?.path || ''
   
-  // Debug logging
-  console.log('DEBUG:', {
-    method,
-    routePath,
-    queryStringParameters: event.queryStringParameters,
-    path: event.path,
-    rawPath: event.rawPath,
-  })
+  // SPECIAL: Health endpoint - doesn't need any imports
+  if (path === 'health' || path === '/health' || path === '') {
+    return new Response(JSON.stringify({ ok: true, time: new Date().toISOString() }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  
+  // Debug: log everything
+  console.log('=== INCOMING REQUEST ===')
+  console.log('Method:', method)
+  console.log('Path:', event.path)
+  console.log('RawPath:', event.rawPath)
+  console.log('QueryStringParameters:', event.queryStringParameters)
+  
+  // Get the route path
+  let routePath = event.queryStringParameters?.path || event.path || ''
+  routePath = String(routePath).trim()
+  if (!routePath.startsWith('/')) routePath = '/' + routePath
+  routePath = routePath.replace(/\/$/, '') || '/'
+  
+  console.log('Final routePath:', routePath)
   
   const productMatch = routePath.match(/^\/products\/(\d+)$/)
 
   try {
+    // HEALTH CHECK - MUST COME FIRST, NO AUTH REQUIRED
+    if (routePath === '/' || routePath === '/health' || routePath.includes('health')) {
+      console.log('✓✓✓ HEALTH ENDPOINT MATCHED ✓✓✓')
+      if (method === 'GET') {
+        return json(200, { ok: true, timestamp: new Date().toISOString() })
+      }
+      return json(405, { message: 'Method not allowed' })
+    }
+
     if (method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -82,15 +105,6 @@ export async function handler(event) {
           Allow: 'GET,POST,PUT,DELETE,OPTIONS',
         },
       })
-    }
-
-    if (routePath === '/health' || routePath === 'health') {
-      if (method !== 'GET') {
-        return json(405, { message: 'Method not allowed' })
-      }
-
-      console.log('✓ Health endpoint matched, returning OK')
-      return json(200, { ok: true })
     }
 
     if (routePath === '/auth/login') {
@@ -116,11 +130,16 @@ export async function handler(event) {
       })
     }
 
+    // ALL OTHER ROUTES REQUIRE AUTHENTICATION
+    console.log('Checking authentication for route:', routePath)
     const currentUser = await requireUser(event)
 
     if (!currentUser) {
+      console.log('❌ Authentication failed')
       return json(401, { message: 'Session expired. Please sign in again.' })
     }
+
+    console.log('✓ User authenticated:', currentUser.email)
 
     if (routePath === '/profile') {
       if (method === 'GET') {
