@@ -5,6 +5,7 @@ import process from 'node:process'
 import authRoutes from './routes/auth.js'
 import productRoutes from './routes/products.js'
 import profileRoutes from './routes/profile.js'
+import { getApiErrorPayload } from './lib/apiErrors.js'
 import { requireAuth } from './middleware/auth.js'
 
 dotenv.config()
@@ -26,7 +27,8 @@ app.use('/api/profile', requireAuth, profileRoutes)
 app.use((error, _req, res, next) => {
   void next
   console.error(error)
-  res.status(500).json({ message: 'Internal server error' })
+  const { statusCode, message } = getApiErrorPayload(error)
+  res.status(statusCode).json({ message })
 })
 
 app.listen(port, () => {

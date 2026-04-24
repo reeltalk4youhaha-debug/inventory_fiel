@@ -10,6 +10,7 @@ import {
   updateProductRecord,
   verifyAdminPassword,
 } from '../../server/lib/inventoryService.js'
+import { getApiErrorPayload } from '../../server/lib/apiErrors.js'
 import { createSessionToken, extractBearerToken, verifySessionToken } from '../../server/lib/session.js'
 
 function json(statusCode, payload) {
@@ -248,7 +249,8 @@ export async function handler(event) {
     return json(404, { message: 'Route not found' })
   } catch (error) {
     console.error(error)
-    return json(500, { message: 'Internal server error' })
+    const { statusCode, message } = getApiErrorPayload(error)
+    return json(statusCode, { message })
   }
 }
 

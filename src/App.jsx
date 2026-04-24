@@ -6,6 +6,9 @@ const navigationItems = ['Dashboard', 'Inventory', 'Reports', 'Profile']
 const columns = ['Product', 'Flavor', 'SKU', 'Quantity', 'Description', 'Updates', 'Actions']
 const PAGE_SIZE = 10
 const SESSION_STORAGE_KEY = 'vapor-hq-session'
+const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
+const MAX_IMAGE_DIMENSION = 1280
+const MAX_IMAGE_DATA_URL_LENGTH = 2_000_000
 
 const emptyProductForm = {
   name: '',
@@ -32,7 +35,7 @@ function getStoredSession() {
   )
 }
 
-function readFileAsDataUrl(file) {
+function readFileAsDataUrlRaw(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
 
@@ -41,6 +44,66 @@ function readFileAsDataUrl(file) {
 
     reader.readAsDataURL(file)
   })
+}
+
+function loadImageElement(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Unable to process image file.'))
+    image.src = source
+  })
+}
+
+async function readFileAsDataUrl(file) {
+  if (!file?.type?.startsWith('image/')) {
+    throw new Error('Select a valid image file.')
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error('Use an image smaller than 5 MB.')
+  }
+
+  const sourceDataUrl = await readFileAsDataUrlRaw(file)
+  const image = await loadImageElement(sourceDataUrl)
+  const sourceWidth = image.naturalWidth || image.width
+  const sourceHeight = image.naturalHeight || image.height
+
+  if (!sourceWidth || !sourceHeight) {
+    return sourceDataUrl
+  }
+
+  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(sourceWidth, sourceHeight))
+  const width = Math.max(1, Math.round(sourceWidth * scale))
+  const height = Math.max(1, Math.round(sourceHeight * scale))
+  const canvas = document.createElement('canvas')
+
+  canvas.width = width
+  canvas.height = height
+
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    throw new Error('Unable to process image file.')
+  }
+
+  context.drawImage(image, 0, 0, width, height)
+
+  let optimizedDataUrl =
+    file.type === 'image/png'
+      ? canvas.toDataURL('image/png')
+      : canvas.toDataURL('image/webp', 0.82)
+
+  if (optimizedDataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
+    optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.76)
+  }
+
+  if (optimizedDataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
+    throw new Error('Image is too large to upload. Use a smaller image.')
+  }
+
+  return optimizedDataUrl
 }
 
 function getInitials(name) {
@@ -334,6 +397,7 @@ function App() {
   }
 
   const handleProductFieldChange = (field, value) => {
+    setProductsError('')
     setFormValues((current) => ({ ...current, [field]: value }))
   }
 
@@ -350,12 +414,16 @@ function App() {
         imageUrl,
         imageName: file.name,
       }))
+      setProductsError('')
+    } catch (error) {
+      setProductsError(error.message)
     } finally {
       setIsImageLoading(false)
     }
   }
 
   const handleImageRemove = () => {
+    setProductsError('')
     setFormValues((current) => ({
       ...current,
       imageUrl: '',
@@ -395,6 +463,16 @@ function App() {
       items: Number(formValues.items),
       imageUrl: formValues.imageUrl.trim(),
       updates: buildUpdateMessage({ previousProduct, nextValues: formValues, mode: editor.mode }),
+    }
+
+    if (!payload.name || !payload.flavor || !payload.sku || !payload.description) {
+      setProductsError('Complete all product fields before saving.')
+      return
+    }
+
+    if (!Number.isFinite(payload.items) || payload.items < 0) {
+      setProductsError('Quantity must be zero or more.')
+      return
     }
 
     setIsSavingProduct(true)
