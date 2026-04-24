@@ -223,16 +223,16 @@ function App() {
         setAccount(profileResponse.user)
         setProducts(productsResponse.products || [])
         setProductsError('')
-      } catch (error) {
+      } catch {
         if (isCancelled) return
 
         clearSessionToken()
         setIsAuthenticated(false)
         setSignInError('Unable to restore your session. Please sign in again.')
         setProductsError('')
-      } finally {
-        if (isCancelled) return
+      }
 
+      if (!isCancelled) {
         setIsAuthLoading(false)
         setIsProductsLoading(false)
       }
@@ -423,25 +423,13 @@ function App() {
     closeOverlays()
   }
 
-  const handleProfileSave = async ({ name, role, workspace }) => {
+  const handleProfileSave = async ({ name }) => {
     const response = await inventoryApi.updateProfile({
       name,
-      role,
-      workspace,
     })
 
     setAccount(response.user)
-    return { ok: true, message: 'Profile details updated.' }
-  }
-
-  const handleEmailSave = async ({ email, currentPassword }) => {
-    const response = await inventoryApi.updateEmail({
-      email,
-      currentPassword,
-    })
-
-    setAccount(response.user)
-    return { ok: true, message: 'Email updated successfully.' }
+    return { ok: true, message: 'Username updated successfully.' }
   }
 
   const handlePasswordSave = async ({ currentPassword, nextPassword }) => {
@@ -490,10 +478,9 @@ function App() {
     if (activePage === 'Profile' && account) {
       return (
         <ProfilePanel
-          products={products}
+          key={`${account.id}-${account.name}`}
           account={account}
           onProfileSave={handleProfileSave}
-          onEmailSave={handleEmailSave}
           onPasswordSave={handlePasswordSave}
         />
       )
@@ -970,18 +957,9 @@ function ReportsPanel({ products }) {
   )
 }
 
-function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswordSave }) {
-  const totalStock = products.reduce((sum, product) => sum + Number(product.items || 0), 0)
-  const lowStockCount = products.filter((product) => getStockStatus(product.items) === 'Low Stock').length
-  const outOfStockCount = products.filter((product) => getStockStatus(product.items) === 'Out of Stock').length
+function ProfilePanel({ account, onProfileSave, onPasswordSave }) {
   const [profileForm, setProfileForm] = useState({
     name: account.name,
-    role: account.role,
-    workspace: account.workspace,
-  })
-  const [emailForm, setEmailForm] = useState({
-    email: account.email,
-    currentPassword: '',
   })
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -989,29 +967,12 @@ function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswor
     confirmPassword: '',
   })
   const [profileFeedback, setProfileFeedback] = useState(null)
-  const [emailFeedback, setEmailFeedback] = useState(null)
   const [passwordFeedback, setPasswordFeedback] = useState(null)
   const [passwordVisibility, setPasswordVisibility] = useState({
-    emailCurrent: false,
     passwordCurrent: false,
     passwordNext: false,
     passwordConfirm: false,
   })
-
-  useEffect(() => {
-    setProfileForm({
-      name: account.name,
-      role: account.role,
-      workspace: account.workspace,
-    })
-  }, [account.name, account.role, account.workspace])
-
-  useEffect(() => {
-    setEmailForm({
-      email: account.email,
-      currentPassword: '',
-    })
-  }, [account.email])
 
   const togglePasswordVisibility = (field) => {
     setPasswordVisibility((current) => ({
@@ -1023,8 +984,8 @@ function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswor
   const handleProfileSubmit = async (event) => {
     event.preventDefault()
 
-    if (!profileForm.name.trim() || !profileForm.role.trim() || !profileForm.workspace.trim()) {
-      setProfileFeedback({ tone: 'error', message: 'Complete all profile fields before saving.' })
+    if (!profileForm.name.trim()) {
+      setProfileFeedback({ tone: 'error', message: 'Enter a username before saving.' })
       return
     }
 
@@ -1033,26 +994,6 @@ function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswor
       setProfileFeedback({ tone: result.ok ? 'success' : 'error', message: result.message })
     } catch (error) {
       setProfileFeedback({ tone: 'error', message: error.message })
-    }
-  }
-
-  const handleEmailSubmit = async (event) => {
-    event.preventDefault()
-
-    if (!emailForm.email.trim() || !emailForm.currentPassword) {
-      setEmailFeedback({ tone: 'error', message: 'Enter the new email and your current password.' })
-      return
-    }
-
-    try {
-      const result = await onEmailSave(emailForm)
-      setEmailFeedback({ tone: result.ok ? 'success' : 'error', message: result.message })
-
-      if (result.ok) {
-        setEmailForm((current) => ({ ...current, currentPassword: '' }))
-      }
-    } catch (error) {
-      setEmailFeedback({ tone: 'error', message: error.message })
     }
   }
 
@@ -1095,75 +1036,29 @@ function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswor
       <div className="panel-toolbar">
         <div className="panel-copy">
           <p className="panel-kicker">Profile</p>
-          <h1 className="panel-title">Account Profile</h1>
+          <h1 className="panel-title">Account Settings</h1>
           <p className="panel-description">
-            Manage your profile details, email, and password from the admin account stored in PostgreSQL.
+            Keep things simple here: update your username and password for the admin account.
           </p>
         </div>
       </div>
 
       <section className="profile-grid">
-        <article className="profile-card profile-card--hero">
-          <div className="profile-avatar">{getInitials(account.name)}</div>
-          <div className="profile-identity">
-            <h2>{account.name}</h2>
-            <p>{account.role}</p>
-          </div>
-          <div className="profile-details-grid">
-            <div className="profile-detail">
-              <span>Email</span>
-              <strong>{account.email}</strong>
-            </div>
-            <div className="profile-detail">
-              <span>Workspace</span>
-              <strong>{account.workspace}</strong>
-            </div>
-            <div className="profile-detail">
-              <span>Role</span>
-              <strong>{account.role}</strong>
-            </div>
-            <div className="profile-detail">
-              <span>Member Since</span>
-              <strong>{account.memberSince}</strong>
-            </div>
-          </div>
-        </article>
-
         <article className="profile-card">
           <div className="report-card-header">
-            <p className="panel-kicker">Workspace Snapshot</p>
-            <h2 className="report-title">Current Inventory Scope</h2>
+            <p className="panel-kicker">Manage Username</p>
+            <h2 className="report-title">Username</h2>
           </div>
-          <div className="profile-stats-list">
-            <div className="profile-stat-row">
-              <span>Products Managed</span>
-              <strong>{products.length}</strong>
-            </div>
-            <div className="profile-stat-row">
-              <span>Total Stock</span>
-              <strong>{formatItemCount(totalStock)}</strong>
-            </div>
-            <div className="profile-stat-row">
-              <span>Low Stock Alerts</span>
-              <strong>{lowStockCount}</strong>
-            </div>
-            <div className="profile-stat-row">
-              <span>Out Of Stock</span>
-              <strong>{outOfStockCount}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="profile-card profile-card--full">
-          <div className="report-card-header">
-            <p className="panel-kicker">Manage Profile</p>
-            <h2 className="report-title">Profile Details</h2>
+          <p className="report-empty">Change the name shown across the dashboard and profile.</p>
+          <div className="profile-detail">
+            <span>Sign-In Email</span>
+            <strong>{account.email}</strong>
           </div>
 
           <form className="profile-form" onSubmit={handleProfileSubmit}>
             <div className="form-grid">
-              <label className="form-field">
-                Full Name
+              <label className="form-field form-field--full">
+                Username
                 <input
                   type="text"
                   value={profileForm.name}
@@ -1171,32 +1066,7 @@ function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswor
                     setProfileForm((current) => ({ ...current, name: event.target.value }))
                     setProfileFeedback(null)
                   }}
-                  required
-                />
-              </label>
-
-              <label className="form-field">
-                Role
-                <input
-                  type="text"
-                  value={profileForm.role}
-                  onChange={(event) => {
-                    setProfileForm((current) => ({ ...current, role: event.target.value }))
-                    setProfileFeedback(null)
-                  }}
-                  required
-                />
-              </label>
-
-              <label className="form-field form-field--full">
-                Workspace
-                <input
-                  type="text"
-                  value={profileForm.workspace}
-                  onChange={(event) => {
-                    setProfileForm((current) => ({ ...current, workspace: event.target.value }))
-                    setProfileFeedback(null)
-                  }}
+                  placeholder="Enter your username"
                   required
                 />
               </label>
@@ -1216,66 +1086,7 @@ function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswor
 
             <div className="profile-form-actions">
               <button type="submit" className="primary-button">
-                Save Profile
-              </button>
-            </div>
-          </form>
-        </article>
-
-        <article className="profile-card">
-          <div className="report-card-header">
-            <p className="panel-kicker">Manage Email</p>
-            <h2 className="report-title">Email Settings</h2>
-          </div>
-
-          <form className="profile-form" onSubmit={handleEmailSubmit}>
-            <div className="form-grid">
-              <label className="form-field form-field--full">
-                Email Address
-                <input
-                  type="email"
-                  value={emailForm.email}
-                  onChange={(event) => {
-                    setEmailForm((current) => ({ ...current, email: event.target.value }))
-                    setEmailFeedback(null)
-                  }}
-                  required
-                />
-              </label>
-
-              <label className="form-field form-field--full">
-                Current Password
-                <PasswordInput
-                  value={emailForm.currentPassword}
-                  onChange={(event) => {
-                    setEmailForm((current) => ({
-                      ...current,
-                      currentPassword: event.target.value,
-                    }))
-                    setEmailFeedback(null)
-                  }}
-                  placeholder="Enter your current password"
-                  showPassword={passwordVisibility.emailCurrent}
-                  onToggle={() => togglePasswordVisibility('emailCurrent')}
-                />
-              </label>
-            </div>
-
-            {emailFeedback ? (
-              <p
-                className={
-                  emailFeedback.tone === 'success'
-                    ? 'form-feedback form-feedback-success'
-                    : 'form-feedback form-feedback-error'
-                }
-              >
-                {emailFeedback.message}
-              </p>
-            ) : null}
-
-            <div className="profile-form-actions">
-              <button type="submit" className="primary-button">
-                Update Email
+                Save Username
               </button>
             </div>
           </form>
@@ -1284,8 +1095,9 @@ function ProfilePanel({ products, account, onProfileSave, onEmailSave, onPasswor
         <article className="profile-card">
           <div className="report-card-header">
             <p className="panel-kicker">Manage Password</p>
-            <h2 className="report-title">Password Settings</h2>
+            <h2 className="report-title">Password</h2>
           </div>
+          <p className="report-empty">Use your current password to set a new one.</p>
 
           <form className="profile-form" onSubmit={handlePasswordSubmit}>
             <div className="form-grid">

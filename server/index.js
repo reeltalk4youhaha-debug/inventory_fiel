@@ -23,7 +23,8 @@ app.use('/api/auth', authRoutes)
 app.use('/api/products', requireAuth, productRoutes)
 app.use('/api/profile', requireAuth, profileRoutes)
 
-app.use((error, _req, res, _next) => {
+app.use((error, _req, res, next) => {
+  void next
   console.error(error)
   res.status(500).json({ message: 'Internal server error' })
 })

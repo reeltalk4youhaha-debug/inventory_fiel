@@ -74,9 +74,9 @@ export async function verifyAdminPassword(adminId, password) {
 export async function updateAdminProfile(adminId, { name, role, workspace }) {
   const result = await pool.query(
     `UPDATE ${dbSchema}.admin_users
-     SET full_name = $1,
-         role = $2,
-         workspace_name = $3,
+     SET full_name = COALESCE(NULLIF($1, ''), full_name),
+         role = COALESCE(NULLIF($2, ''), role),
+         workspace_name = COALESCE(NULLIF($3, ''), workspace_name),
          updated_at = CURRENT_TIMESTAMP
      WHERE admin_id = $4
        AND is_active = TRUE

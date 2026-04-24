@@ -22,20 +22,6 @@ function json(statusCode, payload) {
   })
 }
 
-function getRoutePath(event) {
-  // Netlify redirect passes path as query param from netlify.toml
-  let rawPath = event.queryStringParameters?.path || ''
-  // Fallback to event.path if available
-  if (!rawPath) {
-    rawPath = event.path || ''
-  }
-  // Remove leading/trailing slashes and normalize
-  rawPath = String(rawPath).trim().replace(/^\/+/, '').replace(/\/+$/, '')
-  const result = rawPath === '' ? '/' : `/${rawPath}`
-  console.log('getRoutePath result:', result, 'from:', rawPath)
-  return result
-}
-
 async function parseBody(event) {
   if (!event.body) {
     return {}
