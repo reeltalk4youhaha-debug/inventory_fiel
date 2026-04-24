@@ -84,11 +84,12 @@ export async function handler(event) {
       })
     }
 
-    if (routePath === '/health') {
+    if (routePath === '/health' || routePath === 'health') {
       if (method !== 'GET') {
         return json(405, { message: 'Method not allowed' })
       }
 
+      console.log('✓ Health endpoint matched, returning OK')
       return json(200, { ok: true })
     }
 
