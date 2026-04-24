@@ -21,7 +21,19 @@ function normalizeRoutePath(path) {
     routePath = `/${routePath}`
   }
 
-  return routePath.replace(/\/$/, '') || '/'
+  routePath = routePath.replace(/\/$/, '') || '/'
+
+  // Vercel can pass file-based API paths like "/api/auth/login".
+  // Normalize them so the shared handler always sees "/auth/login".
+  if (routePath === '/api') {
+    return '/'
+  }
+
+  if (routePath.startsWith('/api/')) {
+    return routePath.slice(4) || '/'
+  }
+
+  return routePath
 }
 
 async function requireUser(headers = {}) {
