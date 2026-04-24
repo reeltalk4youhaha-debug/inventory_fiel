@@ -286,6 +286,13 @@ function App() {
   const dashboardProducts = paginateProducts(filteredProducts, dashboardPage)
   const inventoryProducts = paginateProducts(filteredProducts, inventoryPage)
 
+  const refreshProducts = async () => {
+    const productsResponse = await inventoryApi.getProducts()
+    const nextProducts = normalizeProductList(productsResponse.products)
+    setProducts(nextProducts)
+    return nextProducts
+  }
+
   const closeEditor = () => {
     setEditor({ open: false, mode: 'add', productId: null })
     setFormValues(emptyProductForm)
@@ -297,6 +304,7 @@ function App() {
     setEditor({ open: true, mode: 'add', productId: null })
     setFormValues(emptyProductForm)
     setIsImageLoading(false)
+    setProductsError('')
   }
 
   const openEditModal = (product) => {
@@ -311,6 +319,7 @@ function App() {
       imageName: product.imageUrl ? `${product.name} image` : '',
     })
     setIsImageLoading(false)
+    setProductsError('')
   }
 
   const closeOverlays = () => {
@@ -392,29 +401,12 @@ function App() {
 
     try {
       if (editor.mode === 'edit') {
-        const response = await inventoryApi.updateProduct(editor.productId, payload)
-        const nextProduct = normalizeProduct(response.product)
-
-        if (!nextProduct) {
-          throw new Error('Unexpected product response from the API.')
-        }
-
-        setProducts((current) =>
-          normalizeProductList(current).map((product) =>
-            product.id === editor.productId ? nextProduct : product,
-          ),
-        )
+        await inventoryApi.updateProduct(editor.productId, payload)
       } else {
-        const response = await inventoryApi.createProduct(payload)
-        const nextProduct = normalizeProduct(response.product)
-
-        if (!nextProduct) {
-          throw new Error('Unexpected product response from the API.')
-        }
-
-        setProducts((current) => [nextProduct, ...normalizeProductList(current)])
+        await inventoryApi.createProduct(payload)
       }
 
+      await refreshProducts()
       setProductsError('')
       closeEditor()
     } catch (error) {
@@ -428,9 +420,7 @@ function App() {
 
     try {
       await inventoryApi.deleteProduct(deleteTarget.id)
-      setProducts((current) =>
-        normalizeProductList(current).filter((product) => product.id !== deleteTarget.id),
-      )
+      await refreshProducts()
       setProductsError('')
       setDeleteTarget(null)
     } catch (error) {
@@ -523,7 +513,21 @@ function App() {
       return <ReportsPanel products={normalizedProducts} />
     }
 
-    if (activePage === 'Profile' && account) {
+    if (activePage === 'Profile') {
+      if (!account) {
+        return (
+          <section className="inventory-panel" aria-label="Profile">
+            <div className="panel-toolbar">
+              <div className="panel-copy">
+                <p className="panel-kicker">Profile</p>
+                <h1 className="panel-title">Account Settings</h1>
+                <p className="panel-description">Loading your account settings...</p>
+              </div>
+            </div>
+          </section>
+        )
+      }
+
       return (
         <ProfilePanel
           key={`${account.id}-${account.name}`}
