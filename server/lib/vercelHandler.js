@@ -1,23 +1,11 @@
-import { handleApiRequest } from '../server/lib/apiHandler.js'
+import { handleApiRequest } from './apiHandler.js'
 
-export const config = {
+export const vercelApiConfig = {
   api: {
     bodyParser: {
       sizeLimit: '10mb',
     },
   },
-}
-
-function getRequestPath(pathParam) {
-  if (Array.isArray(pathParam) && pathParam.length) {
-    return `/${pathParam.join('/')}`
-  }
-
-  if (typeof pathParam === 'string' && pathParam.trim()) {
-    return `/${pathParam.trim()}`
-  }
-
-  return '/'
 }
 
 function parseBody(body) {
@@ -36,10 +24,10 @@ function parseBody(body) {
   return body
 }
 
-export default async function handler(req, res) {
+export async function handleVercelRequest(req, res, path) {
   const result = await handleApiRequest({
     method: req.method,
-    path: getRequestPath(req.query?.path),
+    path,
     headers: req.headers || {},
     body: parseBody(req.body),
     logger: console,
