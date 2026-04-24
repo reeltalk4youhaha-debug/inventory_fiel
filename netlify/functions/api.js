@@ -31,7 +31,9 @@ function getRoutePath(event) {
   }
   // Remove leading/trailing slashes and normalize
   rawPath = String(rawPath).trim().replace(/^\/+/, '').replace(/\/+$/, '')
-  return `/${rawPath}`
+  const result = rawPath === '' ? '/' : `/${rawPath}`
+  console.log('getRoutePath result:', result, 'from:', rawPath)
+  return result
 }
 
 async function parseBody(event) {
