@@ -602,6 +602,7 @@ function App() {
           account={account}
           onProfileSave={handleProfileSave}
           onPasswordSave={handlePasswordSave}
+          onSignOut={handleSignOut}
         />
       )
     }
@@ -671,19 +672,6 @@ function App() {
                 </button>
               ))}
             </nav>
-
-            {account ? (
-              <div className="topbar-account">
-                <div className="topbar-avatar">{getInitials(account.name)}</div>
-                <div className="topbar-account-copy">
-                  <strong>{account.name}</strong>
-                  <span>{account.email}</span>
-                </div>
-                <button type="button" className="secondary-button topbar-signout" onClick={handleSignOut}>
-                  Sign Out
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
       </header>
@@ -1031,6 +1019,7 @@ function InventoryTable({ products, totalCount, isLoading, manageMode, onEdit, o
 
 function ProductShopCard({ product, onView }) {
   const status = getStockStatus(product.items)
+  const shouldShowStatus = status !== 'Healthy'
 
   return (
     <article className="shop-product-card">
@@ -1048,9 +1037,13 @@ function ProductShopCard({ product, onView }) {
           <strong>{formatItemCount(product.items)}</strong>
         </div>
         <div className="shop-product-actions">
-          <span className={`stock-pill stock-pill-${status.toLowerCase().replace(/\s+/g, '-')}`}>
-            {status}
-          </span>
+          {shouldShowStatus ? (
+            <span className={`stock-pill stock-pill-${status.toLowerCase().replace(/\s+/g, '-')}`}>
+              {status}
+            </span>
+          ) : (
+            <span aria-hidden="true" />
+          )}
           <button type="button" className="inline-button" onClick={() => onView(product)}>
             View
           </button>
@@ -1066,58 +1059,68 @@ function ReportsPanel({ products }) {
   const averageStock = totalProducts ? Math.round(totalStock / totalProducts) : 0
   const lowStockProducts = products.filter((product) => getStockStatus(product.items) === 'Low Stock')
   const outOfStockProducts = products.filter((product) => getStockStatus(product.items) === 'Out of Stock')
+  const alertProducts = [...outOfStockProducts, ...lowStockProducts]
   const recentlyAddedProducts = products.filter((product) =>
     product.updates.toLowerCase().includes('recently added'),
   )
-  const highestStockProducts = [...products].sort((left, right) => right.items - left.items).slice(0, 4)
+  const highestStockProducts = [...products].sort((left, right) => right.items - left.items).slice(0, 5)
   const latestActivity = [...products].slice(0, 5)
+  const maxStock = Math.max(...highestStockProducts.map((product) => Number(product.items || 0)), 1)
 
   return (
-    <section className="inventory-panel" aria-label="Reports">
-      <div className="panel-toolbar">
-        <div className="panel-copy">
+    <section className="reports-page" aria-label="Reports">
+      <div className="reports-hero">
+        <div>
           <p className="panel-kicker">Reports</p>
-          <h1 className="panel-title">Inventory Reports</h1>
-          <p className="panel-description">
+          <h1 className="reports-title">Inventory Intelligence</h1>
+          <p className="reports-description">
             Review stock health, recent changes, and product movement from the current database records.
           </p>
         </div>
-      </div>
-
-      <section className="report-summary-grid" aria-label="Report summary">
-        <article className="dashboard-summary-card">
-          <span>Total Products</span>
-          <strong>{totalProducts}</strong>
-        </article>
-        <article className="dashboard-summary-card">
+        <div className="reports-hero-metric">
           <span>Total Stock</span>
           <strong>{formatItemCount(totalStock)}</strong>
-        </article>
-        <article className="dashboard-summary-card">
+          <small>{totalProducts} products tracked</small>
+        </div>
+      </div>
+
+      <section className="reports-kpi-strip" aria-label="Report summary">
+        <article>
           <span>Average Quantity</span>
           <strong>{formatItemCount(averageStock)}</strong>
         </article>
-        <article className="dashboard-summary-card">
+        <article>
+          <span>Low Stock</span>
+          <strong>{lowStockProducts.length}</strong>
+        </article>
+        <article>
+          <span>Out Of Stock</span>
+          <strong>{outOfStockProducts.length}</strong>
+        </article>
+        <article>
           <span>Recently Added</span>
-          <strong>{recentlyAddedProducts.length} products</strong>
+          <strong>{recentlyAddedProducts.length}</strong>
         </article>
       </section>
 
-      <section className="report-content-grid">
-        <article className="report-card report-card--wide">
-          <div className="report-card-header">
-            <p className="panel-kicker">Stock Ranking</p>
-            <h2 className="report-title">Highest Quantity Products</h2>
+      <section className="reports-grid">
+        <article className="reports-panel reports-panel-wide">
+          <div className="reports-section-heading">
+            <span>Stock Ranking</span>
+            <h2>Highest Quantity Products</h2>
           </div>
-          <div className="report-list">
+          <div className="stock-bars">
             {highestStockProducts.length ? (
               highestStockProducts.map((product) => (
-                <div key={product.id} className="report-item">
-                  <div>
+                <div key={product.id} className="stock-bar-row">
+                  <div className="stock-bar-label">
                     <strong>{product.name}</strong>
                     <span>
                       {product.sku} / {product.flavor}
                     </span>
+                  </div>
+                  <div className="stock-bar-track" aria-hidden="true">
+                    <span style={{ width: `${Math.max(8, (Number(product.items || 0) / maxStock) * 100)}%` }} />
                   </div>
                   <strong>{formatItemCount(product.items)}</strong>
                 </div>
@@ -1128,42 +1131,47 @@ function ReportsPanel({ products }) {
           </div>
         </article>
 
-        <article className="report-card">
-          <div className="report-card-header">
-            <p className="panel-kicker">Attention</p>
-            <h2 className="report-title">Low And Out Of Stock</h2>
+        <article className="reports-panel reports-alert-panel">
+          <div className="reports-section-heading">
+            <span>Attention</span>
+            <h2>Stock Alerts</h2>
           </div>
-          <div className="report-list">
-            {[...lowStockProducts, ...outOfStockProducts].length ? (
-              [...lowStockProducts, ...outOfStockProducts].map((product) => (
-                <div key={product.id} className="report-item">
-                  <div>
+          <div className="alert-list">
+            {alertProducts.length ? (
+              alertProducts.map((product) => {
+                const status = getStockStatus(product.items)
+
+                return (
+                  <div key={product.id} className="alert-row">
+                    <span className={`stock-pill stock-pill-${status.toLowerCase().replace(/\s+/g, '-')}`}>
+                      {status}
+                    </span>
                     <strong>{product.name}</strong>
-                    <span>{getStockStatus(product.items)}</span>
+                    <small>{formatItemCount(product.items)}</small>
                   </div>
-                  <strong>{formatItemCount(product.items)}</strong>
-                </div>
-              ))
+                )
+              })
             ) : (
               <p className="report-empty">No critical stock alerts right now.</p>
             )}
           </div>
         </article>
 
-        <article className="report-card">
-          <div className="report-card-header">
-            <p className="panel-kicker">Activity</p>
-            <h2 className="report-title">Recent Product Updates</h2>
+        <article className="reports-panel reports-panel-wide">
+          <div className="reports-section-heading">
+            <span>Activity</span>
+            <h2>Recent Product Updates</h2>
           </div>
-          <div className="report-list">
+          <div className="activity-timeline">
             {latestActivity.length ? (
               latestActivity.map((product) => (
-                <div key={product.id} className="report-item">
+                <div key={product.id} className="activity-row">
+                  <span className="activity-dot" aria-hidden="true" />
                   <div>
                     <strong>{product.name}</strong>
                     <span>{product.updates}</span>
                   </div>
-                  <strong>{formatItemCount(product.items)}</strong>
+                  <small>{formatItemCount(product.items)}</small>
                 </div>
               ))
             ) : (
@@ -1176,7 +1184,7 @@ function ReportsPanel({ products }) {
   )
 }
 
-function ProfilePanel({ account, onProfileSave, onPasswordSave }) {
+function ProfilePanel({ account, onProfileSave, onPasswordSave, onSignOut }) {
   const [profileForm, setProfileForm] = useState({
     name: account.name,
   })
@@ -1263,6 +1271,22 @@ function ProfilePanel({ account, onProfileSave, onPasswordSave }) {
       </div>
 
       <section className="profile-grid">
+        <article className="profile-card profile-card--account">
+          <div className="profile-account-heading">
+            <div className="profile-avatar">{getInitials(account.name)}</div>
+            <div className="profile-identity">
+              <h2>{account.name}</h2>
+              <p>{account.email}</p>
+            </div>
+          </div>
+          <p className="report-empty">Signed in as the active admin for this inventory workspace.</p>
+          <div className="profile-form-actions">
+            <button type="button" className="secondary-button" onClick={onSignOut}>
+              Sign Out
+            </button>
+          </div>
+        </article>
+
         <article className="profile-card">
           <div className="report-card-header">
             <p className="panel-kicker">Manage Username</p>
@@ -1574,6 +1598,8 @@ function DeleteModal({ product, onCancel, onConfirm }) {
 }
 
 function ProductDetailsModal({ product, onClose }) {
+  const status = getStockStatus(product.items)
+
   return (
     <div className="modal-backdrop">
       <section
@@ -1582,41 +1608,43 @@ function ProductDetailsModal({ product, onClose }) {
         aria-modal="true"
         aria-labelledby="product-details-title"
       >
-        <div className="modal-header">
-          <div>
-            <p className="panel-kicker">Dashboard</p>
-            <h2 id="product-details-title" className="modal-title">
-              {product.name}
-            </h2>
-            <p className="modal-description">
-              Product details and latest activity for the selected item.
-            </p>
-          </div>
-        </div>
-
-        <div className="details-layout">
-          <div className="details-visual">
+        <div className="details-hero">
+          <div className="details-hero-media">
             <ProductImage name={product.name} imageUrl={product.imageUrl} />
           </div>
 
-          <div className="details-grid">
-            <article className="details-card">
-              <span>Flavor</span>
-              <strong>{product.flavor}</strong>
-            </article>
-            <article className="details-card">
-              <span>SKU</span>
-              <strong>{product.sku}</strong>
-            </article>
-            <article className="details-card">
-              <span>Quantity</span>
+          <div className="details-hero-copy">
+            <div>
+              <p className="panel-kicker">Product Preview</p>
+              <h2 id="product-details-title" className="modal-title">
+                {product.name}
+              </h2>
+              <p className="modal-description">
+                {product.flavor} flavor with SKU {product.sku}.
+              </p>
+            </div>
+            <div className="details-hero-meta">
+              <span className={`stock-pill stock-pill-${status.toLowerCase().replace(/\s+/g, '-')}`}>
+                {status}
+              </span>
               <strong>{formatItemCount(product.items)}</strong>
-            </article>
-            <article className="details-card">
-              <span>Latest Update</span>
-              <strong>{product.updates}</strong>
-            </article>
+            </div>
           </div>
+        </div>
+
+        <div className="details-grid">
+          <article className="details-card">
+            <span>Flavor</span>
+            <strong>{product.flavor}</strong>
+          </article>
+          <article className="details-card">
+            <span>SKU</span>
+            <strong>{product.sku}</strong>
+          </article>
+          <article className="details-card details-card--wide">
+            <span>Latest Update</span>
+            <strong>{product.updates}</strong>
+          </article>
         </div>
 
         <article className="details-description">
