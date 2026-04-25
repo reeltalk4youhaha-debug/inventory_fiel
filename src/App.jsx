@@ -3,6 +3,16 @@ import { clearSessionToken, getSessionToken, inventoryApi, persistSessionToken }
 import vaporLogo from './images/Vapor.png'
 
 const navigationItems = ['Dashboard', 'Inventory', 'Reports', 'Profile']
+const navigationIconPaths = {
+  Dashboard:
+    'M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-11h6V4h-6v5Z',
+  Inventory:
+    'M12 2 4 6.5v11L12 22l8-4.5v-11L12 2Zm0 2.3 5.4 3.05L12 10.4 6.6 7.35 12 4.3Zm-6 4.8 5 2.82v6.86l-5-2.82V9.1Zm12 0v6.86l-5 2.82v-6.86l5-2.82Z',
+  Reports:
+    'M5 19V5h14v14H5Zm3-3h2V9H8v7Zm4 0h2v-4h-2v4Zm4 0h2v-8h-2v8Z',
+  Profile:
+    'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0H5Z',
+}
 const columns = ['Product', 'Flavor', 'SKU', 'Quantity', 'Description', 'Updates', 'Actions']
 const PAGE_SIZE = 10
 const SESSION_STORAGE_KEY = 'vapor-hq-session'
@@ -227,23 +237,6 @@ function filterProducts(products, searchQuery) {
   )
 }
 
-function getDashboardStats(products) {
-  const totalProducts = products.length
-  const totalStock = products.reduce((sum, product) => sum + Number(product.items || 0), 0)
-  const lowStock = products.filter((product) => {
-    const quantity = Number(product.items || 0)
-    return quantity > 0 && quantity <= 20
-  }).length
-  const outOfStock = products.filter((product) => Number(product.items || 0) <= 0).length
-
-  return [
-    { label: 'Total Products', value: totalProducts },
-    { label: 'Total Stock', value: formatItemCount(totalStock) },
-    { label: 'Low Stock \u26A0\uFE0F', value: `${lowStock} products` },
-    { label: 'Out of Stock \u274C', value: `${outOfStock} products` },
-  ]
-}
-
 function getStockStatus(items) {
   const quantity = Number(items || 0)
   if (quantity <= 0) return 'Out of Stock'
@@ -341,7 +334,6 @@ function App() {
 
   const normalizedProducts = normalizeProductList(products)
   const filteredProducts = filterProducts(normalizedProducts, searchQuery)
-  const dashboardStats = getDashboardStats(normalizedProducts)
   const dashboardTotalPages = getTotalPages(filteredProducts.length)
   const inventoryTotalPages = getTotalPages(filteredProducts.length)
   const dashboardPage = Math.min(pageByView.Dashboard, dashboardTotalPages)
@@ -566,13 +558,11 @@ function App() {
           description="Create, update, and delete inventory items stored in your PostgreSQL database."
           products={inventoryProducts}
           totalCount={normalizedProducts.length}
-          searchQuery={searchQuery}
           filteredCount={filteredProducts.length}
           currentPage={inventoryPage}
           totalPages={inventoryTotalPages}
           isLoading={isProductsLoading}
           errorMessage={productsError}
-          onSearchChange={handleSearchChange}
           onPreviousPage={() => handlePageChange('Inventory', inventoryPage - 1)}
           onNextPage={() => handlePageChange('Inventory', inventoryPage + 1)}
           manageMode
@@ -623,16 +613,14 @@ function App() {
         description="This dashboard reflects the latest product records stored in your PostgreSQL inventory database."
         products={dashboardProducts}
         totalCount={normalizedProducts.length}
-        searchQuery={searchQuery}
         filteredCount={filteredProducts.length}
         currentPage={dashboardPage}
         totalPages={dashboardTotalPages}
         isLoading={isProductsLoading}
         errorMessage={productsError}
-        onSearchChange={handleSearchChange}
         onPreviousPage={() => handlePageChange('Dashboard', dashboardPage - 1)}
         onNextPage={() => handlePageChange('Dashboard', dashboardPage + 1)}
-        summaryCards={dashboardStats}
+        displayMode="shop"
         onView={setViewTarget}
       />
     )
@@ -660,6 +648,16 @@ function App() {
           <Brand />
 
           <div className="topbar-actions">
+            {activePage === 'Dashboard' || activePage === 'Inventory' ? (
+              <SearchField
+                className="topbar-search"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                placeholder="Search inventory..."
+                label="Search products"
+              />
+            ) : null}
+
             <nav className="nav-tabs" aria-label="Primary navigation">
               {navigationItems.map((item) => (
                 <button
@@ -668,6 +666,7 @@ function App() {
                   className={item === activePage ? 'nav-button is-active' : 'nav-button'}
                   onClick={() => handleNavigate(item)}
                 >
+                  <NavIcon name={item} />
                   {item}
                 </button>
               ))}
@@ -715,6 +714,28 @@ function App() {
 
       {viewTarget ? <ProductDetailsModal product={viewTarget} onClose={() => setViewTarget(null)} /> : null}
     </main>
+  )
+}
+
+function NavIcon({ name }) {
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d={navigationIconPaths[name]} />
+    </svg>
+  )
+}
+
+function SearchField({ value, onChange, placeholder, label, className = '' }) {
+  return (
+    <label className={`search-field ${className}`.trim()}>
+      <span className="search-label">{label}</span>
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
+    </label>
   )
 }
 
@@ -816,22 +837,24 @@ function CatalogPanel({
   description,
   products,
   totalCount,
-  searchQuery,
   filteredCount,
   currentPage,
   totalPages,
   isLoading,
   errorMessage,
-  onSearchChange,
   onPreviousPage,
   onNextPage,
   summaryCards = null,
   actions = null,
   manageMode = false,
+  displayMode = 'table',
   onEdit = null,
   onDelete = null,
   onView = null,
 }) {
+  const hasProducts = products.length > 0
+  const showPagination = Boolean(filteredCount) && !isLoading
+
   return (
     <section className="inventory-panel" aria-label={title}>
       <div className="panel-toolbar">
@@ -840,18 +863,11 @@ function CatalogPanel({
           <h1 className="panel-title">{title}</h1>
           <p className="panel-description">{description}</p>
         </div>
-        <div className="panel-utility">
-          <label className="search-field">
-            <span className="search-label">Search</span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search product, SKU, flavor, quantity..."
-            />
-          </label>
-          {actions ? <div className="panel-actions">{actions}</div> : null}
-        </div>
+        {actions ? (
+          <div className="panel-utility">
+            <div className="panel-actions">{actions}</div>
+          </div>
+        ) : null}
       </div>
 
       {errorMessage ? <p className="panel-status panel-status-error">{errorMessage}</p> : null}
@@ -867,107 +883,180 @@ function CatalogPanel({
         </section>
       ) : null}
 
-      <div className="inventory-grid">
-        <div className="inventory-header" role="row">
-          {columns.map((column) => (
-            <div key={column} className="inventory-heading" role="columnheader">
-              {column}
+      {displayMode === 'shop' ? (
+        <div className="shop-product-area">
+          {isLoading ? (
+            <ProductEmptyState loading />
+          ) : hasProducts ? (
+            <div className="shop-product-grid">
+              {products.map((product) => (
+                <ProductShopCard key={product.id} product={product} onView={onView} />
+              ))}
             </div>
+          ) : (
+            <ProductEmptyState totalCount={totalCount} />
+          )}
+        </div>
+      ) : (
+        <InventoryTable
+          products={products}
+          totalCount={totalCount}
+          isLoading={isLoading}
+          manageMode={manageMode}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onView={onView}
+        />
+      )}
+
+      {showPagination ? (
+        <div className="table-footer">
+          <span className="pagination-status">
+            Page {currentPage} of {totalPages}
+          </span>
+          <div className="pagination-actions">
+            <button
+              type="button"
+              className="pagination-button"
+              onClick={onPreviousPage}
+              disabled={currentPage === 1}
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              className="pagination-button"
+              onClick={onNextPage}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function ProductEmptyState({ loading = false, totalCount = 0 }) {
+  if (loading) {
+    return (
+      <div className="empty-state">
+        <strong>Loading products from the database...</strong>
+        <p>Your latest inventory records are being fetched.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="empty-state">
+      <strong>{totalCount ? 'No matching products found.' : 'No products in the database yet.'}</strong>
+      <p>
+        {totalCount
+          ? 'Try a different search term or clear the search field.'
+          : 'Use the Inventory page to add your first product.'}
+      </p>
+    </div>
+  )
+}
+
+function InventoryTable({ products, totalCount, isLoading, manageMode, onEdit, onDelete, onView }) {
+  return (
+    <div className="inventory-grid">
+      <div className="inventory-header" role="row">
+        {columns.map((column) => (
+          <div key={column} className="inventory-heading" role="columnheader">
+            {column}
+          </div>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <ProductEmptyState loading />
+      ) : products.length ? (
+        <div className="inventory-body">
+          {products.map((product) => (
+            <article key={product.id} className="inventory-row" role="row">
+              <div className="inventory-cell product-cell" role="cell">
+                <ProductImage name={product.name} imageUrl={product.imageUrl} />
+                <div className="product-meta">
+                  <strong>{product.name}</strong>
+                  <span>{manageMode ? 'Saved in inventory database' : 'Database snapshot'}</span>
+                </div>
+              </div>
+              <div className="inventory-cell" role="cell">
+                {product.flavor}
+              </div>
+              <div className="inventory-cell" role="cell">
+                {product.sku}
+              </div>
+              <div className="inventory-cell quantity-cell" role="cell">
+                {formatItemCount(product.items)}
+              </div>
+              <div className="inventory-cell description-cell" role="cell">
+                {product.description}
+              </div>
+              <div className="inventory-cell updates-cell" role="cell">
+                {product.updates}
+              </div>
+              <div className="inventory-cell" role="cell">
+                {manageMode ? (
+                  <div className="action-group">
+                    <button type="button" className="inline-button" onClick={() => onEdit(product)}>
+                      Update
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-button inline-button-danger"
+                      onClick={() => onDelete(product)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" className="inline-button" onClick={() => onView(product)}>
+                    View
+                  </button>
+                )}
+              </div>
+            </article>
           ))}
         </div>
+      ) : (
+        <ProductEmptyState totalCount={totalCount} />
+      )}
+    </div>
+  )
+}
 
-        {isLoading ? (
-          <div className="empty-state">
-            <strong>Loading products from the database...</strong>
-            <p>Your latest inventory records are being fetched.</p>
-          </div>
-        ) : products.length ? (
-          <div className="inventory-body">
-            {products.map((product) => (
-              <article key={product.id} className="inventory-row" role="row">
-                <div className="inventory-cell product-cell" role="cell">
-                  <ProductImage name={product.name} imageUrl={product.imageUrl} />
-                  <div className="product-meta">
-                    <strong>{product.name}</strong>
-                    <span>{manageMode ? 'Saved in inventory database' : 'Database snapshot'}</span>
-                  </div>
-                </div>
-                <div className="inventory-cell" role="cell">
-                  {product.flavor}
-                </div>
-                <div className="inventory-cell" role="cell">
-                  {product.sku}
-                </div>
-                <div className="inventory-cell quantity-cell" role="cell">
-                  {formatItemCount(product.items)}
-                </div>
-                <div className="inventory-cell description-cell" role="cell">
-                  {product.description}
-                </div>
-                <div className="inventory-cell updates-cell" role="cell">
-                  {product.updates}
-                </div>
-                <div className="inventory-cell" role="cell">
-                  {manageMode ? (
-                    <div className="action-group">
-                      <button type="button" className="inline-button" onClick={() => onEdit(product)}>
-                        Update
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-button inline-button-danger"
-                        onClick={() => onDelete(product)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" className="inline-button" onClick={() => onView(product)}>
-                      View
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <strong>{totalCount ? 'No matching products found.' : 'No products in the database yet.'}</strong>
-            <p>
-              {totalCount
-                ? `Try a different search term or clear "${searchQuery}".`
-                : 'Use the Inventory page to add your first product.'}
-            </p>
-          </div>
-        )}
+function ProductShopCard({ product, onView }) {
+  const status = getStockStatus(product.items)
 
-        {filteredCount && !isLoading ? (
-          <div className="table-footer">
-            <span className="pagination-status">
-              Page {currentPage} of {totalPages}
-            </span>
-            <div className="pagination-actions">
-              <button
-                type="button"
-                className="pagination-button"
-                onClick={onPreviousPage}
-                disabled={currentPage === 1}
-              >
-                Prev
-              </button>
-              <button
-                type="button"
-                className="pagination-button"
-                onClick={onNextPage}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        ) : null}
+  return (
+    <article className="shop-product-card">
+      <div className="shop-product-media">
+        <ProductImage name={product.name} imageUrl={product.imageUrl} />
       </div>
-    </section>
+      <div className="shop-product-copy">
+        <div>
+          <p className="shop-product-flavor">{product.flavor}</p>
+          <h2 className="shop-product-name">{product.name}</h2>
+        </div>
+        <p className="shop-product-description">{product.description}</p>
+        <div className="shop-product-meta">
+          <span>{product.sku}</span>
+          <strong>{formatItemCount(product.items)}</strong>
+        </div>
+        <div className="shop-product-actions">
+          <span className={`stock-pill stock-pill-${status.toLowerCase().replace(/\s+/g, '-')}`}>
+            {status}
+          </span>
+          <button type="button" className="inline-button" onClick={() => onView(product)}>
+            View
+          </button>
+        </div>
+      </div>
+    </article>
   )
 }
 
